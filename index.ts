@@ -7,11 +7,11 @@ export function WrightSTV(numVacancies: number, votes: Vote[], candidates: Candi
 }
 
 export function calculateDroopQuota(numVacancies: number, numVotes: number): number {
-	return Fraction(Math.floor(1 + numVotes / (numVacancies + 1)))
+	return Fraction(numVotes).div(1 + numVacancies).add(1).floor()
 }
 
 export function calculateHareQuota(numVacancies: number, numVotes: number): number {
-	return Fraction(Math.floor(numVotes / numVacancies))
+	return Fraction(numVotes).div(numVacancies).floor()
 }
 
 
@@ -44,7 +44,11 @@ export class RoundVote {
 	}
 
 	mostPreferred(candidates: Candidate[]): Candidate {
-		return this.vote.prefs.find(c => candidates.includes(c))
+		const prefCandidate = this.vote.prefs.find(c => candidates.includes(c))
+		if (!prefCandidate) {
+			throw new Error('exhausted vote, no mostPreferred amongst candidates')
+		}
+		return prefCandidate
 	}
 
 	updateValueWithSurplusRatio(surplusRatio: Fraction): void {
@@ -97,7 +101,7 @@ export class CandidateResult {
 	}
 
 	static sortHighest(a: CandidateResult, b: CandidateResult): number {
-		const byValue = a.cachedValue.sub(b.cachedValue)
+		const byValue = b.cachedValue.sub(a.cachedValue)
 		if (byValue.compare(0) === 0) {
 			const byNumVotes = a.cachedRoundVotes.length - b.cachedRoundVotes.length
 			if (byNumVotes === 0) {
@@ -120,9 +124,13 @@ export class ResultMap extends Map {
 
 	saveRoundVotes(roundVotes: RoundVote[], validCandidates: Candidate[]): void {
 		roundVotes.forEach(roundVote => {
-			const prefCandidate = roundVote.mostPreferred(validCandidates)
-			const prefCandidateResult = this.get(prefCandidate)
-			prefCandidateResult.saveRoundVote(roundVote)
+			try {
+				const prefCandidate = roundVote.mostPreferred(validCandidates)
+				const prefCandidateResult = this.get(prefCandidate)
+				prefCandidateResult.saveRoundVote(roundVote)
+			} catch (e) {
+				// ignore exhausted votes
+			}
 		})
 	}
 

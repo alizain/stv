@@ -7,11 +7,11 @@ function WrightSTV(numVacancies, votes, candidates) {
 }
 exports.WrightSTV = WrightSTV;
 function calculateDroopQuota(numVacancies, numVotes) {
-    return Fraction(Math.floor(1 + numVotes / (numVacancies + 1)));
+    return Fraction(numVotes).div(1 + numVacancies).add(1).floor();
 }
 exports.calculateDroopQuota = calculateDroopQuota;
 function calculateHareQuota(numVacancies, numVotes) {
-    return Fraction(Math.floor(numVotes / numVacancies));
+    return Fraction(numVotes).div(numVacancies).floor();
 }
 exports.calculateHareQuota = calculateHareQuota;
 class Candidate {
@@ -35,7 +35,11 @@ class RoundVote {
         this.value = Fraction(1);
     }
     mostPreferred(candidates) {
-        return this.vote.prefs.find(c => candidates.includes(c));
+        const prefCandidate = this.vote.prefs.find(c => candidates.includes(c));
+        if (!prefCandidate) {
+            throw new Error('exhausted vote, no mostPreferred amongst candidates');
+        }
+        return prefCandidate;
     }
     updateValueWithSurplusRatio(surplusRatio) {
         this.value = this.value.mul(surplusRatio);
@@ -77,7 +81,7 @@ class CandidateResult {
         return this.cachedValue.sub(quota).div(this.cachedValue);
     }
     static sortHighest(a, b) {
-        const byValue = a.cachedValue.sub(b.cachedValue);
+        const byValue = b.cachedValue.sub(a.cachedValue);
         if (byValue.compare(0) === 0) {
             const byNumVotes = a.cachedRoundVotes.length - b.cachedRoundVotes.length;
             if (byNumVotes === 0) {
@@ -98,9 +102,14 @@ class ResultMap extends Map {
     }
     saveRoundVotes(roundVotes, validCandidates) {
         roundVotes.forEach(roundVote => {
-            const prefCandidate = roundVote.mostPreferred(validCandidates);
-            const prefCandidateResult = this.get(prefCandidate);
-            prefCandidateResult.saveRoundVote(roundVote);
+            try {
+                const prefCandidate = roundVote.mostPreferred(validCandidates);
+                const prefCandidateResult = this.get(prefCandidate);
+                prefCandidateResult.saveRoundVote(roundVote);
+            }
+            catch (e) {
+                // ignore exhausted votes
+            }
         });
     }
     getSortedResults() {
