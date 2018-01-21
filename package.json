@@ -3,5 +3,14 @@
   "version": "1.0.0",
   "main": "index.js",
   "author": "Alizain Feerasta <alizain.feerasta@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "test": "./node_modules/.bin/ava"
+  },
+  "devDependencies": {
+    "ava": "^0.24.0"
+  },
+  "dependencies": {
+    "fraction.js": "^4.0.4"
+  }
 }

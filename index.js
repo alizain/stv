@@ -1,93 +1,85 @@
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const Fraction = require('fraction.js');
 function WrightSTV(numVacancies, votes, candidates) {
-    var quota = calculateDroopQuota(numVacancies, votes.length);
+    const quota = calculateDroopQuota(numVacancies, votes.length);
     return determineWinnersIteratively(numVacancies, quota, votes, candidates);
 }
+exports.WrightSTV = WrightSTV;
 function calculateDroopQuota(numVacancies, numVotes) {
-    return Math.floor(1 + numVotes / (numVacancies + 1));
+    return Fraction(Math.floor(1 + numVotes / (numVacancies + 1)));
 }
+exports.calculateDroopQuota = calculateDroopQuota;
 function calculateHareQuota(numVacancies, numVotes) {
-    return Math.floor(numVotes / numVacancies);
+    return Fraction(Math.floor(numVotes / numVacancies));
 }
-var Candidate = (function () {
-    function Candidate(name) {
+exports.calculateHareQuota = calculateHareQuota;
+class Candidate {
+    constructor(name) {
         this.name = name;
     }
-    Candidate.filterCandidateFromList = function (candidates, candidateToRemove) {
-        return candidates.filter(function (c) { return c !== candidateToRemove; });
-    };
-    return Candidate;
-}());
-var Vote = (function () {
-    function Vote() {
-        var prefs = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            prefs[_i] = arguments[_i];
-        }
+    static filterCandidateFromList(candidates, candidateToRemove) {
+        return candidates.filter(c => c !== candidateToRemove);
+    }
+}
+exports.Candidate = Candidate;
+class Vote {
+    constructor(prefs) {
         this.prefs = Array.from(new Set(prefs));
     }
-    return Vote;
-}());
-var RoundVote = (function () {
-    function RoundVote(vote) {
+}
+exports.Vote = Vote;
+class RoundVote {
+    constructor(vote) {
         this.vote = vote;
-        this.value = 1;
+        this.value = Fraction(1);
     }
-    RoundVote.prototype.mostPreferred = function (candidates) {
-        return this.vote.prefs.find(function (c) { return candidates.includes(c); });
-    };
-    RoundVote.prototype.updateValueWithSurplusRatio = function (surplusRatio) {
-        this.value *= surplusRatio;
-    };
-    RoundVote.fromVotes = function (votes) {
-        return votes.map(function (v) { return new RoundVote(v); });
-    };
-    return RoundVote;
-}());
-var CandidateResult = (function () {
-    function CandidateResult(candidate) {
+    mostPreferred(candidates) {
+        return this.vote.prefs.find(c => candidates.includes(c));
+    }
+    updateValueWithSurplusRatio(surplusRatio) {
+        this.value = this.value.mul(surplusRatio);
+    }
+    static fromVotes(votes) {
+        return votes.map(v => new RoundVote(v));
+    }
+}
+exports.RoundVote = RoundVote;
+class CandidateResult {
+    constructor(candidate) {
         this.candidate = candidate;
         this.cachedRoundVotes = [];
-        this.cachedValue = 0;
+        this.cachedValue = Fraction(0);
     }
-    CandidateResult.prototype.saveRoundVote = function (roundVote) {
-        this.cachedValue += roundVote.value;
+    saveRoundVote(roundVote) {
+        this.cachedValue = this.cachedValue.add(roundVote.value);
         this.cachedRoundVotes.push(roundVote);
-    };
-    CandidateResult.prototype.isWinner = function (quota) {
-        return this.cachedValue >= quota;
-    };
-    CandidateResult.prototype.isVoteSurplus = function (quota) {
-        return this.cachedValue > quota;
-    };
-    CandidateResult.prototype.declareVoteSurplus = function (quota) {
-        if (this.cachedValue <= quota) {
+    }
+    isWinner(quota) {
+        return this.cachedValue.compare(quota) >= 0;
+    }
+    isVoteSurplus(quota) {
+        return this.cachedValue.compare(quota) > 0;
+    }
+    declareVoteSurplus(quota) {
+        if (this.cachedValue.compare(quota) <= 0) {
             throw new Error();
         }
-        var surplusRatio = this.calculateSurplusRatio(quota);
-        this.cachedRoundVotes.forEach(function (rv) { return rv.updateValueWithSurplusRatio(surplusRatio); });
+        const surplusRatio = this.calculateSurplusRatio(quota);
+        this.cachedRoundVotes.forEach(rv => rv.updateValueWithSurplusRatio(surplusRatio));
         this.cachedValue = quota;
         return this.cachedRoundVotes;
-    };
-    CandidateResult.prototype.calculateSurplusRatio = function (quota) {
-        if (this.cachedValue <= quota) {
+    }
+    calculateSurplusRatio(quota) {
+        if (this.cachedValue.compare(quota) <= 0) {
             throw new Error();
         }
-        return (this.cachedValue - quota) / this.cachedValue;
-    };
-    CandidateResult.sortHighest = function (a, b) {
-        var byValue = a.cachedValue - b.cachedValue;
-        if (byValue === 0) {
-            var byNumVotes = a.cachedRoundVotes.length - b.cachedRoundVotes.length;
+        return this.cachedValue.sub(quota).div(this.cachedValue);
+    }
+    static sortHighest(a, b) {
+        const byValue = a.cachedValue.sub(b.cachedValue);
+        if (byValue.compare(0) === 0) {
+            const byNumVotes = a.cachedRoundVotes.length - b.cachedRoundVotes.length;
             if (byNumVotes === 0) {
                 // not sure how to handle this scenario...
                 return 0;
@@ -95,32 +87,27 @@ var CandidateResult = (function () {
             return byNumVotes;
         }
         return byValue;
-    };
-    return CandidateResult;
-}());
-var ResultMap = (function (_super) {
-    __extends(ResultMap, _super);
-    function ResultMap() {
-        return _super !== null && _super.apply(this, arguments) || this;
     }
-    ResultMap.fromCandidates = function (candidates) {
-        var resultMap = new ResultMap();
-        candidates.forEach(function (c) { return resultMap.set(c, new CandidateResult(c)); });
+}
+exports.CandidateResult = CandidateResult;
+class ResultMap extends Map {
+    static fromCandidates(candidates) {
+        const resultMap = new ResultMap();
+        candidates.forEach(c => resultMap.set(c, new CandidateResult(c)));
         return resultMap;
-    };
-    ResultMap.prototype.saveRoundVotes = function (roundVotes, validCandidates) {
-        var _this = this;
-        roundVotes.forEach(function (roundVote) {
-            var prefCandidate = roundVote.mostPreferred(validCandidates);
-            var prefCandidateResult = _this.get(prefCandidate);
+    }
+    saveRoundVotes(roundVotes, validCandidates) {
+        roundVotes.forEach(roundVote => {
+            const prefCandidate = roundVote.mostPreferred(validCandidates);
+            const prefCandidateResult = this.get(prefCandidate);
             prefCandidateResult.saveRoundVote(roundVote);
         });
-    };
-    ResultMap.prototype.getSortedResults = function () {
+    }
+    getSortedResults() {
         return Array.from(this.values()).sort(CandidateResult.sortHighest);
-    };
-    return ResultMap;
-}(Map));
+    }
+}
+exports.ResultMap = ResultMap;
 function determineWinnersIteratively(numVacancies, quota, legalVotes, candidates) {
     if (candidates.length < numVacancies) {
         throw new Error();
@@ -128,52 +115,58 @@ function determineWinnersIteratively(numVacancies, quota, legalVotes, candidates
     else if (candidates.length === numVacancies) {
         return candidates;
     }
-    var roundVotes = RoundVote.fromVotes(legalVotes);
-    var stableResultMap = calculateStableVoteResult(quota, roundVotes, candidates);
-    var winningCandidates = determineWinners(quota, stableResultMap);
+    const roundVotes = RoundVote.fromVotes(legalVotes);
+    const stableResultMap = calculateStableVoteResult(quota, roundVotes, candidates);
+    const winningCandidates = determineWinners(quota, stableResultMap);
     if (winningCandidates.length === numVacancies) {
         return winningCandidates;
     }
-    var remainingCandidates = filterExcludedCandidate(stableResultMap);
+    const remainingCandidates = filterExcludedCandidate(stableResultMap);
     return determineWinnersIteratively(numVacancies, quota, legalVotes, remainingCandidates);
 }
+exports.determineWinnersIteratively = determineWinnersIteratively;
 function calculateStableVoteResult(quota, roundVotes, candidates, resultMap) {
     if (!resultMap) {
         resultMap = calculateInitialVoteResult(roundVotes, candidates);
     }
-    var surplusCandidate = determineSurplusCandidate(quota, resultMap);
+    const surplusCandidate = determineSurplusCandidate(quota, resultMap);
     if (surplusCandidate === false) {
         return resultMap;
     }
-    var remainingCandidates = Candidate.filterCandidateFromList(candidates, surplusCandidate);
+    const remainingCandidates = Candidate.filterCandidateFromList(candidates, surplusCandidate);
     updateResultWithSurplusVotes(quota, remainingCandidates, resultMap, surplusCandidate);
     return calculateStableVoteResult(quota, roundVotes, remainingCandidates, resultMap);
 }
+exports.calculateStableVoteResult = calculateStableVoteResult;
 function calculateInitialVoteResult(roundVotes, candidates) {
-    var resultMap = ResultMap.fromCandidates(candidates);
+    const resultMap = ResultMap.fromCandidates(candidates);
     resultMap.saveRoundVotes(roundVotes, candidates);
     return resultMap;
 }
+exports.calculateInitialVoteResult = calculateInitialVoteResult;
 function determineSurplusCandidate(quota, resultMap) {
-    var sortedResults = resultMap.getSortedResults();
-    var highestSurplus = sortedResults.find(function (result) { return result.isVoteSurplus(quota); });
+    const sortedResults = resultMap.getSortedResults();
+    const highestSurplus = sortedResults.find(result => result.isVoteSurplus(quota));
     return highestSurplus === undefined ? false : highestSurplus.candidate;
 }
 function updateResultWithSurplusVotes(quota, remainingCandidates, resultMap, surplusCandidate) {
-    var candidateResult = resultMap.get(surplusCandidate);
-    var surplusVotes = candidateResult.declareVoteSurplus(quota);
+    const candidateResult = resultMap.get(surplusCandidate);
+    const surplusVotes = candidateResult.declareVoteSurplus(quota);
     resultMap.saveRoundVotes(surplusVotes, remainingCandidates);
 }
+exports.updateResultWithSurplusVotes = updateResultWithSurplusVotes;
 function determineWinners(quota, stableResultMap) {
     return stableResultMap
         .getSortedResults()
-        .filter(function (result) { return result.isWinner(quota); })
-        .map(function (result) { return result.candidate; });
+        .filter(result => result.isWinner(quota))
+        .map(result => result.candidate);
 }
+exports.determineWinners = determineWinners;
 function filterExcludedCandidate(stableResultMap) {
     return stableResultMap
         .getSortedResults()
-        .map(function (result) { return result.candidate; })
+        .map(result => result.candidate)
         .reverse()
         .slice(1);
 }
+exports.filterExcludedCandidate = filterExcludedCandidate;
